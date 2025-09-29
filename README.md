@@ -1,106 +1,146 @@
-# GPT4V-Image-Captioner / GPT4V图像打标器
+# GPT4V-Image-Captioner
 
-[中文版说明](https://github.com/jiayev/GPT4V-Image-Captioner/blob/main/README-CN.md)
+A Gradio-based image captioning and dataset tooling app that works with multiple vision-language providers:
+- OpenAI GPT-4o (Vision)
+- Google Vertex AI (Gemini via Vertex)
+- Google Gemini (via google-generativeai)
+- Alibaba Qwen-VL (DashScope)
+- Optional local backends (Moondream, CogVLM, MiniCPM)
 
-We now have [sd-webui-GPT4V-Image-Captioner](https://github.com/SleeeepyZhou/sd-webui-GPT4V-Image-Captioner) for SD WebUI,  
-Remade application version by [Godot](https://github.com/godotengine/godot), [VLMCaption-TagCraft](https://github.com/SleeeepyZhou/VLMCaption-TagCraft), is now compatible with most online APIs. 
+It supports single-image captioning, batch captioning to sidecar .txt files, optional image pre-processing, watermark detection, rule-based image classification, tag analysis/clean-up (word cloud, co-occurrence network), and simple image segmentation.
 
-This is a multifunctional image processing toolbox built with Gradio, capable of tagging images using the GPT-4-vision or Claude 3 API, the [cogVLM](https://github.com/THUDM/CogVLM) model, [Qwen-VL](https://huggingface.co/Qwen)(Alibaba Cloud), the [Moondream](https://github.com/vikhyat/moondream) model. 
+## Quick start (one click on Windows)
 
-Key features include:
+- Double-click `start.ps1` (or run the two lines below in PowerShell if execution policy blocks scripts):
 
-- One-click installation and use
-- Single image and multi-image batch tagging
-- Choice of online GPT4V or Claude 3 or [Qwen-VL](https://huggingface.co/Qwen)(Alibaba Cloud) & local CogVLM and Moondream models
-- Visual tag analysis and processing
-- Image pre-compression
-- Keyword filtering and watermark image recognition
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+.\start.ps1
+```
 
-Developers: [Jiaye](https://civitai.com/user/jiayev1), [LEOSAM是只兔狲](https://civitai.com/user/LEOSAM), [SleeeepyZhou](https://civitai.com/user/SleeeepyZhou), [Fok](https://civitai.com/user/fok3827), GPT4. Welcome everyone to add more new features to this project.
+This will:
+- Create a virtual environment `.venv`
+- Install minimal dependencies from `requirements.txt`
+- Launch the Gradio UI in your default browser at http://127.0.0.1:8848
 
-![下载](https://github.com/jiayev/GPT4V-Image-Captioner/assets/16369810/90612e2b-aac1-4368-84d6-482bb660f5aa)
+Want all optional features (tag visualization, local model helpers, provider SDKs)? Install extras as well:
 
-### Please note that the Claude 3 feature is not finished yet.
-To use Claude 3, simply replace the API key and URL with the Claude 3 API key and URL (/v1/messages), and changing the model name to "claude-3-opus" (or sonnet).
+```powershell
+.\start.ps1 -Full
+```
 
-# Installation and Startup Guide
+You can pass through server flags as needed:
+- `-Port 8848` choose another port
+- `-Listen` bind to 0.0.0.0 (allow LAN access)
+- `-Share` enable Gradio share link
+- `-NoBrowser` do not auto-open the browser
 
-### Windows (If the automatic installation fails, please refer to the [Manual Installation Instructions](#windows-manual-installation-instructions))
+Example:
+```powershell
+.\start.ps1 -Full -Port 9000 -Listen -NoBrowser
+```
 
-1. Open Command Prompt as administrator and navigate to the directory where you want to clone the repository.
-2. Clone the repository using the following command:
-    ```
-    git clone https://github.com/jiayev/GPT4V-Image-Captioner
-    ```
-3. Double-click `install_windows.bat` to run and install all necessary dependencies.
-4. After the installation is complete, you can launch the GPT4V-Image-Captioner by double-clicking `start_windows.bat`.
-5. Hold down Ctrl and click on the URL in the terminal (or copy the URL to your browser), which will open the Gradio app interface in your default browser.
-6. Enter the official OpenAI or third-party GPT-4V API Key and API Url at the top of the interface. After setting the image address, you can start tagging the image.
+## How it works (step by step)
 
-### Linux / macOS
+1) UI + persistence
+- The app UI is defined in `gpt-caption.py` using Gradio Blocks.
+- API settings are saved in `api_settings.json` the first time you run a provider.
 
-1. Open a terminal and navigate to the directory where you want to clone the repository.
-2. Clone the repository using the following command:
-    ```
-    git clone https://github.com/jiayev/GPT4V-Image-Captioner
-    ```
-3. Navigate to the cloned directory:
-    ```
-    cd GPT4V-Image-Captioner
-    ```
-4. Make the install and start scripts executable with the following command:
-    ```
-    chmod +x install_linux_mac.sh; chmod +x start_linux_mac.sh
-    ```
-5. Execute the install script:
-    ```
-    ./install_linux_mac.sh
-    ```
-6. Launch the GPT4V-Image-Captioner in the terminal by executing the launch script:
-    ```
-    ./start_linux_mac.sh
-    ```
-7. Copy the URL displayed in the terminal and open it in your browser to access the Gradio app interface.
-8. Enter the official OpenAI or third-party GPT-4V API Key and API Url at the top of the interface. After setting the image address, you can start tagging the image.
+2) Providers and where to put credentials
+- OpenAI (GPT-4o):
+  - API Key: your OpenAI key
+  - API URL: keep default `https://api.openai.com/v1/chat/completions`
+  - Model: e.g. `gpt-4o` or `gpt-4o-mini`
+- Anthropic Claude (optional):
+  - API Key: your Claude key
+  - API URL: `https://api.anthropic.com/v1/messages`
+  - Model: e.g. `claude-3.5-sonnet`
+- Google Gemini (non-Vertex):
+  - API Key: your Gemini API key
+  - API URL: any string containing `gemini` (auto-detected)
+  - Model: e.g. `gemini-1.5-pro` or `gemini-1.5-flash-latest`
+- Alibaba Qwen-VL:
+  - API Key: your DashScope key
+  - API URL: `https://dashscope.aliyuncs.com/v1/services/aigc/multimodal-generation/generation`
+  - Model: choose from the dropdown (e.g., `qwen-vl-plus`, `qwen-vl-max`)
+- Google Vertex AI (Gemini on Vertex):
+  - API Key field: path to your Service Account JSON (file on disk)
+  - API URL field: your Google Cloud Project ID (e.g., `my-project-123456`)
+  - Model: `gemini-2.0-flash-exp` by default (change if needed)
+  - You can also save this config via the "Vertex AI Configuration" accordion in the UI.
+    - Tip: Copy `service_account.json.templete` to `service_account.json` (repo root) and fill it with your real values. The real JSON file is ignored by git. `start.ps1` will automatically set `GOOGLE_APPLICATION_CREDENTIALS` and try to export `GOOGLE_CLOUD_PROJECT` from that file. In the UI, you can simply set Project ID or even use the sentinel `vertex-ai` value in the API URL box to rely on auto-detection.
 
-### Windows Manual Installation Instructions
+3) Choosing the backend at runtime
+- Use the "Choose API / 选择API" dropdown and click "Switch".
+- For cloud providers, your request is sent directly to that provider’s HTTP API (no extra server required).
+- For local models (Moondream / CogVLM / MiniCPM), the app will start an internal FastAPI server (`openai_api.py`) on `http://127.0.0.1:8000` and route requests to it.
 
-1. Open the Command Prompt by pressing `Win + R`, typing `cmd`, and then pressing `Enter`.
+4) Captioning workflow
+- Single Image tab: upload one image and click "Caption Single Image".
+- Batch Image tab: point to a folder. The app writes one `.txt` next to each image, with overwrite/append/prepend/skip policy.
+- Prompt can include `{path\\to\\captions\\}` to inject extra tags from sidecar `.txt` files named the same as the image.
+- Quality controls influence image resizing for some providers.
 
-2. Clone the repository to your local machine using the following command:
-    ```
-    git clone https://github.com/jiayev/GPT4V-Image-Captioner
-    ```
+5) Extra tools
+- Image Zip: pre-resize/normalize images for faster labeling.
+- Watermark Detection: move/copy images likely containing watermarks to a target folder.
+- Image filtering: rule-based classification into subfolders.
+- Image Segmentation: split each image into a grid and save parts.
+- Tag Manage: analyze, clean up and visualize tags (requires optional dependencies).
 
-3. Once cloning is complete, navigate to the cloned directory:
-    ```
-    cd GPT4V-Image-Captioner
-    ```
+## Install (manual)
 
-4. Before installing any dependencies, make sure that Python is installed on your system. Check for Python's presence by typing the following command and pressing `Enter` in the Command Prompt:
-    ```
-    python --version
-    ```
-   If Python is not installed, you will get an error message. In that case, please visit the [Python official download page](https://www.python.org/downloads/) and follow the instructions to install it.
+If you prefer to set up manually instead of using `start.ps1`:
 
-5. Create a virtual environment named `myenv` to avoid contaminating the global Python environment:
-    ```
-    python -m venv myenv
-    ```
+```powershell
+# From the repository root
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+# Optional features
+pip install -r requirements-optional.txt
 
-6. Activate the virtual environment you just created:
-    ```
-    myenv\Scripts\activate
-    ```
+# Run the app
+python gpt-caption.py --port 8848
+```
 
-7. Update `pip` to date:
-    ```
-    python -m pip install --upgrade pip
-    ```
+Notes for optional/local models:
+- PyTorch installation depends on your CUDA/CPU. For best results, follow https://pytorch.org/get-started/locally/ and install a matching `torch` and `torchvision` version before `requirements-optional.txt`.
+- Hugging Face model downloads are large (20–40GB+). Ensure adequate disk and VRAM (see UI notes in "Local Model" accordion).
 
-8. Install libraries within the virtual environment:
-    ```
-    pip install scipy networkx wordcloud matplotlib Pillow tqdm gradio requests
-    ```
+## Deploy
 
-9. After completing the steps above, you can start GPT4V-Image-Captioner by double-clicking the `start_windows.bat` file.
+- Local network (LAN):
+  - Start with `--listen` to bind `0.0.0.0`, then open the chosen port on your firewall.
+  - Example: `python gpt-caption.py --listen --port 8848 --no-browser`
+- Public internet (quick demo):
+  - Use `--share` to get a temporary Gradio URL. Not recommended for production.
+- Reverse proxy (recommended for persistent access):
+  - Put Nginx/Caddy/IIS/Traefik in front of the app, proxying to `http://127.0.0.1:8848`.
+  - Consider enabling HTTPS and basic auth at the proxy.
+
+## Troubleshooting
+
+- PowerShell cannot run scripts
+  - Run: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force`
+- `google.genai` or `google.generativeai` import errors
+  - Install extras: `pip install -r requirements-optional.txt` or `pip install google-genai google-generativeai`
+- Qwen (DashScope) import error
+  - Install: `pip install dashscope`
+- Tag visualization errors (matplotlib/networkx/wordcloud)
+  - Install extras: `pip install -r requirements-optional.txt`
+- Torch or CUDA errors
+  - Install the right PyTorch build for your CUDA/CPU from pytorch.org, then reinstall `requirements-optional.txt`.
+- Large model downloads are slow
+  - Use a mirror (see `downloader` UI option with `CN` acceleration) or ensure a stable connection.
+
+## Repository map (entry points)
+- `gpt-caption.py` – main Gradio app
+- `lib/Api_Utils.py` – provider routing, retries, settings persistence
+- `openai_api.py` – local FastAPI wrapper for certain backends
+- `vertex_api.py` – Vertex AI client integration
+- `lib/*` – image processing, prompts, tag processing, helper utilities
+
+## License
+This project includes third-party models and libraries under their respective licenses. Review the licenses before commercial use.

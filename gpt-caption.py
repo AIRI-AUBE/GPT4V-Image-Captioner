@@ -14,7 +14,50 @@ import requests
 import socket
 
 from lib.Img_Processing import process_images_in_folder, run_script
-from lib.Tag_Processor import modify_file_content, process_tags
+# Optional tag processing (matplotlib/networkx/wordcloud heavy). Provide fallbacks if missing.
+try:
+    from lib.Tag_Processor import modify_file_content, process_tags
+except ModuleNotFoundError as _e:
+    print("Optional Tag_Processor deps not installed; Tag Manage features disabled (install requirements-optional.txt).")
+
+    def modify_file_content(file_path, new_content, mode):
+        import os
+        # Minimal duplicate of lib.Tag_Processor.modify_file_content to avoid heavy deps
+        if mode == "skip/跳过" and os.path.exists(file_path):
+            print(f"Skip writing, as the file {file_path} already exists.")
+            return
+        if mode == "overwrite/覆盖" or not os.path.exists(file_path):
+            with open(file_path, 'w', encoding='utf-8') as file:
+                file.write(new_content)
+            return
+        def unique_elements(original, addition):
+            original_list = list(map(str.strip, original.split(',')))
+            addition_list = list(map(str.strip, addition.split(',')))
+            combined_list = []
+            seen = set()
+            for item in original_list + addition_list:
+                if item not in seen and item != '':
+                    seen.add(item)
+                    combined_list.append(item)
+            return ', '.join(combined_list)
+        with open(file_path, 'r+', encoding='utf-8') as file:
+            existing_content = file.read()
+            file.seek(0)
+            if mode == "prepend/前置插入":
+                combined_content = unique_elements(new_content, existing_content)
+                file.write(combined_content)
+                file.truncate()
+            elif mode == "append/末尾追加":
+                combined_content = unique_elements(existing_content, new_content)
+                file.write(combined_content)
+                file.truncate()
+            else:
+                raise ValueError("Invalid mode. Must be 'overwrite/覆盖', 'prepend/前置插入', or 'append/末尾追加'.")
+
+    def process_tags(folder_path, top_n, tags_to_remove, tags_to_replace, new_tag, insert_position, translate, api_key, api_url):
+        # Graceful fallback when optional deps missing
+        msg = "Error: Tag processing requires optional dependencies. Please run: pip install -r requirements-optional.txt"
+        return [], None, None, msg
 from lib.GPT_Prompt import get_prompts_from_csv, save_prompt, delete_prompt
 from lib.Api_Utils import run_openai_api, save_api_details, get_api_details, downloader, installer, save_state, qwen_api_switch, gemini_api_switch
 from lib.Detecter import detecter
@@ -323,7 +366,7 @@ def switch_API(api, state):
             return True
         except (socket.timeout, ConnectionRefusedError):
             return False
-    if api[:3] == 'GPT' or api[:4] == "qwen" or api[:6] == "gemini":
+    if api[:3] == 'GPT' or api[:4] == "qwen" or api[:6] == "gemini" or api == "Vertex AI":
         if is_connection():
             requests.post(f"http://127.0.0.1:8000/v1/close")
         key = saved_api_key
@@ -333,6 +376,10 @@ def switch_API(api, state):
             mod = qwen_api_switch(api)
         elif api[:6] == "gemini":
             mod = gemini_api_switch(api)
+        elif api == "Vertex AI":
+            mod = "Vertex AI"
+            if not url or "vertex" not in (url or "").lower():
+                url = "vertex-ai"  # Default identifier for Vertex AI
         else:
             mod = 'GPT4V'
         s_state = mod
@@ -363,10 +410,17 @@ with gr.Blocks(title="GPT4V captioner") as demo:
     gr.Markdown("### Image Captioning with GPT-4-Vision API / 使用 GPT-4-Vision API 进行图像打标")
 
     with gr.Row():
-        api_key_input = gr.Textbox(label="API Key", placeholder="Enter your GPT-4-Vision API Key here", type="password",
-                                   value=saved_api_key)
-        api_url_input = gr.Textbox(label="API URL", value=saved_api_url or "https://api.openai.com/v1/chat/completions",
-                                   placeholder="Enter the GPT-4-Vision API URL here")
+        api_key_input = gr.Textbox(
+            label="API Key / Service Account Path",
+            placeholder="Enter your API Key or leave empty to use ./service_account.json for Vertex AI",
+            type="password",
+            value=saved_api_key,
+        )
+        api_url_input = gr.Textbox(
+            label="API URL / Project ID",
+            value=saved_api_url or "https://api.openai.com/v1/chat/completions",
+            placeholder="Enter the API URL or Vertex AI Project ID (or use 'vertex-ai')",
+        )
         api_model_input = gr.Textbox(label="API Model", value="gpt-4o", placeholder="Enter the model name here")
         quality_choices = ["auto", "high", "low"]
         quality = gr.Dropdown(choices=quality_choices, label="Image Quality / 图片质量", value="auto")
@@ -477,7 +531,7 @@ with gr.Blocks(title="GPT4V captioner") as demo:
                 detect_stop_button.click(stop_batch_processing, inputs=[], outputs=detect_batch_output)
         with gr.Tab("Tag Polishing / 标签润色"):
             gr.Markdown("""
-                    使用其他打标器(如WD1.4)对图片进行打标后，在上方prompt中使用“Describe this image in a very detailed manner and refer these prompt tags:{大括号里替换为放置额外tags文件的目录，会自动读取和图片同名txt。比如 D:\ abc\}”\n
+                    使用其他打标器(如WD1.4)对图片进行打标后，在上方prompt中使用“Describe this image in a very detailed manner and refer these prompt tags:{大括号里替换为放置额外tags文件的目录，会自动读取和图片同名txt。比如 D:\\ abc\\}”\n
                     After marking the image using other captioner(such as WD1.4), enter the prompt in the “” marks in the prompt box.
                         “Describe this image in a very detailed manner and refer these prompt tags:
                         {This is the txt file path for captions, will automatically read the txt file with the same name as the image. For example, D: \ abc\}”
@@ -485,7 +539,7 @@ with gr.Blocks(title="GPT4V captioner") as demo:
         with gr.Tab("Image filtering / 图片筛选"):
             gr.Markdown("""
                         使用自定义规则筛选图片，将回答中包含或不包含对应词的图片放入对应规则的文件夹中。输出目录默认在源目录下的classify_output文件夹下。\n
-                        Use custom rules to filter images. Place images containing or not containing corresponding words in the corresponding rule folder in the answer. Output Directory default in source directory \classify_output.
+                        Use custom rules to filter images. Place images containing or not containing corresponding words in the corresponding rule folder in the answer. Output Directory default in source directory \\classify_output.
                         """)
             with gr.Row():
                 classify_output = gr.Textbox(label="Output / 结果")
@@ -602,6 +656,57 @@ with gr.Blocks(title="GPT4V captioner") as demo:
 
     # API Config
     with gr.Tab("API Config / API配置"):
+        # Vertex AI 配置
+        with gr.Accordion("Vertex AI Configuration / Vertex AI 配置", open=False):
+            gr.Markdown("""
+            **Vertex AI Setup Instructions / Vertex AI 设置说明:**
+            
+            1. Create a Google Cloud project and enable the Vertex AI API
+            2. Create a service account and download the JSON key file
+            3. Set the path to your service account JSON file in the "API Key" field above
+            4. Set your Google Cloud Project ID in the "API URL" field above
+            5. Select "Vertex AI" from the API selection dropdown
+            
+            1. 创建 Google Cloud 项目并启用 Vertex AI API
+            2. 创建服务账户并下载 JSON 密钥文件
+            3. 在上方"API Key"字段中设置服务账户 JSON 文件路径
+            4. 在上方"API URL"字段中设置您的 Google Cloud 项目 ID
+            5. 从 API 选择下拉菜单中选择"Vertex AI"
+            """)
+            
+            with gr.Row():
+                vertex_service_account = gr.Textbox(
+                    label="Service Account JSON Path / 服务账户 JSON 路径",
+                    placeholder="e.g., /path/to/service-account.json",
+                    type="password"
+                )
+                vertex_project_id = gr.Textbox(
+                    label="Google Cloud Project ID / 项目 ID",
+                    placeholder="e.g., my-project-123456"
+                )
+            
+            save_vertex_config_btn = gr.Button("Save Vertex AI Config / 保存 Vertex AI 配置")
+            vertex_config_output = gr.Textbox(label="Configuration Status / 配置状态", interactive=False)
+            
+            def save_vertex_configuration(service_account_path, project_id):
+                try:
+                    from vertex_api import save_vertex_config
+                    if service_account_path and project_id:
+                        config_path = save_vertex_config(service_account_path, project_id)
+                        return f"Vertex AI configuration saved successfully to {config_path}"
+                    else:
+                        return "Error: Please provide both service account path and project ID"
+                except ImportError:
+                    return "Error: Vertex AI module not available"
+                except Exception as e:
+                    return f"Error saving configuration: {str(e)}"
+            
+            save_vertex_config_btn.click(
+                save_vertex_configuration,
+                inputs=[vertex_service_account, vertex_project_id],
+                outputs=vertex_config_output
+            )
+        
         # 本地模型配置
         with gr.Accordion("Local Model / 使用本地模型", open=True):
             with gr.Row():
@@ -632,6 +737,7 @@ with gr.Blocks(title="GPT4V captioner") as demo:
         # API配置
         mod_list = [
             "GPT4V",
+            "Vertex AI",
             "qwen-vl-plus",
             "qwen-vl-max",
             "gemini-1.5-flash-latest",

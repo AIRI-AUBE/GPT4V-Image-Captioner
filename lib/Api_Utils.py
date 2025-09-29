@@ -12,6 +12,17 @@ import re
 from urllib3.util.retry import Retry
 from huggingface_hub import snapshot_download
 
+# Import Vertex AI module
+try:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+    from vertex_api import run_vertex_ai_api, vertex_api_switch
+    VERTEX_AVAILABLE = True
+except ImportError:
+    VERTEX_AVAILABLE = False
+    print("Warning: Vertex AI module not available")
+
 API_PATH = 'api_settings.json'
 QWEN_MOD = 'qwen-vl-plus'
 GEMINI_MOD = 'gemini-1.5-flash-latest'
@@ -58,6 +69,15 @@ def is_gemini(api_url):
         return True
     else:
         return False
+
+# Vertex AI
+def is_vertex_ai(api_url: str):
+    if not api_url:
+        return False
+    low = api_url.lower()
+    if "vertex" in low or low.endswith("vertex-ai"):
+        return True
+    return False
 
 def qwen_api_switch(mod):
     global QWEN_MOD
@@ -220,6 +240,10 @@ def run_openai_api(image_path, prompt, api_key, api_url, quality=None, timeout=1
     prompt = addition_prompt_process(prompt, image_path)
     # print("prompt{}:",prompt)
 
+    # Vertex AI: api_key holds service_account_path, api_url holds project_id or the literal 'vertex-ai'
+    if VERTEX_AVAILABLE and (is_vertex_ai(api_url) or api_url == "vertex-ai"):
+        project_id = None if api_url == "vertex-ai" else api_url
+        return run_vertex_ai_api(image_path, prompt, api_key, project_id, quality, timeout, model)
     # Qwen-VL
     if is_ali(api_url):
         return qwen_api(image_path, prompt, api_key)
@@ -290,7 +314,13 @@ def run_openai_api(image_path, prompt, api_key, api_url, quality=None, timeout=1
 
 # API存档
 def save_api_details(api_key, api_url):
-    if is_ali(api_url):
+    if api_url == "vertex-ai" or is_vertex_ai(api_url):
+        settings = {
+            'model' : 'Vertex AI',
+            'api_key': api_key,
+            'api_url': api_url
+        }
+    elif is_ali(api_url):
         settings = {
             'model' : QWEN_MOD,
             'api_key': api_key,
@@ -314,11 +344,11 @@ def save_api_details(api_key, api_url):
             json.dump(settings, f)
 
 def save_state(llm, key, url):
-    if llm[:3] == "GPT" or llm[:4] == "qwen" or llm[:6] == "gemini":
+    if llm[:3] == "GPT" or llm[:4] == "qwen" or llm[:6] == "gemini" or llm == "Vertex AI":
         settings = {
             'model': llm,
             'api_key': key,
-            'api_url': url
+            'api_url': url or "vertex-ai" if llm == "Vertex AI" else url
         }
 
     elif llm[:3] == "Cog" or llm[:4] == "moon" or llm[:7] == "MiniCPM":

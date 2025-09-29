@@ -1,128 +1,145 @@
-# GPT4V-Image-Captioner / GPT4V图像打标器
+# GPT4V-Image-Captioner 使用说明（简体中文）
 
-[软件安装&演示视频](https://www.bilibili.com/video/BV1pw411g7X1/?spm_id_from=333.999.0.0&vd_source=22436c5073194cf38787049c34e04e02)
+一个基于 Gradio 的图像打标与数据集工具，支持多种视觉大模型服务：
+- OpenAI GPT-4o（视觉）
+- Google Vertex AI（基于 Vertex 的 Gemini）
+- Google Gemini（google-generativeai SDK）
+- 阿里巴巴通义千问 Qwen-VL（DashScope）
+- 可选本地后端（Moondream、CogVLM、MiniCPM）
 
-[英文版说明](https://github.com/jiayev/GPT4V-Image-Captioner/blob/main/README.md)
+功能包含：单图打标、批量打标（同名 .txt 旁车文件）、可选图像预处理、水印检测、基于规则的图片分类、标签分析与清洗（词云、共现网络）、简单图片分割等。
 
-现在我们有SDwebUI插件版本[sd-webui-GPT4V-Image-Captioner](https://github.com/SleeeepyZhou/sd-webui-GPT4V-Image-Captioner)。  
-使用[Godot](https://github.com/godotengine/godot)引擎制作的重制应用程序[VLMCaption-TagCraft](https://github.com/SleeeepyZhou/VLMCaption-TagCraft)，无需python，打包为单个应用程序文件，有Linux与Win双端。目前已经适配了常用的线上API。  
+## Windows 一键启动
 
-这是一款使用 Gradio 构建，可使用GPT-4-vision API、阿里云[通义千问VL](https://modelscope.cn/organization/qwen)、[Moondream](https://github.com/vikhyat/moondream)模型 或 [CogVLM](https://github.com/THUDM/CogVLM)模型进行图像打标的多功能图像处理工具箱。特色功能包括：
+- 直接双击 `start.ps1`（若策略限制脚本执行，可先在 PowerShell 执行下两行）：
 
-- 一键安装及使用
-- 单图反推及批量打标功能
-- 云端 GPT4V 或 Claude 3 及阿里云[通义千问VL](https://modelscope.cn/organization/qwen) & 本地 [CogVLM](https://github.com/THUDM/CogVLM) 或 [Moondream](https://github.com/vikhyat/moondream)双模型可选
-- 可视化标签分析与处理
-- 图像分桶预压缩
-- 关键词筛查及水印图像识别
-- 图像自定义识别分类
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+.\start.ps1
+```
 
-开发者: [Jiaye](https://civitai.com/user/jiayev1), [LEOSAM是只兔狲](https://civitai.com/user/LEOSAM), [SleeeepyZhou](https://space.bilibili.com/360375877), [Fok](https://civitai.com/user/fok3827), GPT4。 欢迎有兴趣的朋友加入，对本项目进行进一步的完善改进。
+脚本将会：
+- 创建虚拟环境 `.venv`
+- 从 `requirements.txt` 安装最小依赖
+- 启动 Gradio 界面（默认 http://127.0.0.1:8848 ）
 
+需要安装全部可选功能（标签可视化、本地模型工具、各云厂商 SDK）可使用：
 
-![下载](https://github.com/jiayev/GPT4V-Image-Captioner/assets/16369810/90612e2b-aac1-4368-84d6-482bb660f5aa)
+```powershell
+.\start.ps1 -Full
+```
 
-要使用Claude 3，只需将API密钥和URL替换为Claude 3的API密钥和URL (/v1/messages)，并将模型名称更改为"claude-3-opus"（或sonnet）。
+可选参数：
+- `-Port 8848` 指定端口
+- `-Listen` 监听 0.0.0.0（允许局域网访问）
+- `-Share` 启用 Gradio share 临时外网链接
+- `-NoBrowser` 不自动打开浏览器
 
-# 安装和启动指南
+示例：
+```powershell
+.\start.ps1 -Full -Port 9000 -Listen -NoBrowser
+```
 
-### Windows（如自动安装失败，请参考[手动安装说明](#windows-手动安装说明)）
+## 工作流程（步骤）
 
-1. 以管理员权限打开命令提示符，并导航到您想要克隆仓库的目录。
-2. 使用以下命令克隆仓库：
-    ```
-    git clone https://github.com/jiayev/GPT4V-Image-Captioner
-    ```
-3. 双击 `install_windows.bat` 运行，并安装所有必要的依赖项。
-4. 安装完成后，您可以通过双击 `start_windows.bat`来在终端中启动GPT4V-Image-Captioner。
-5. 按住ctrl并点击终端中的URL地址（或复制URL地址在浏览器打开），将在默认浏览器中跳转打开Gradio应用界面。
-6. 请在界面最上方输入OpenAI官方或者第三方的GPT-4V API Key与API Url，设置图像地址后，就可以图像打标了。
+1) 界面与设置
+- UI 在 `gpt-caption.py` 中定义。
+- 首次使用某个服务后，API 设置会保存到 `api_settings.json`。
 
+2) 各服务与凭据填写位置
+- OpenAI（GPT-4o）
+  - API Key：你的 OpenAI Key
+  - API URL：保持默认 `https://api.openai.com/v1/chat/completions`
+  - Model：如 `gpt-4o` 或 `gpt-4o-mini`
+- Anthropic Claude（可选）
+  - API Key：你的 Claude Key
+  - API URL：`https://api.anthropic.com/v1/messages`
+  - Model：如 `claude-3.5-sonnet`
+- Google Gemini（非 Vertex）
+  - API Key：你的 Gemini API Key
+  - API URL：包含 `gemini` 的任意字符串（自动识别）
+  - Model：如 `gemini-1.5-pro`、`gemini-1.5-flash-latest`
+- 阿里通义千问 Qwen-VL
+  - API Key：你的 DashScope Key
+  - API URL：`https://dashscope.aliyuncs.com/v1/services/aigc/multimodal-generation/generation`
+  - Model：在下拉菜单选择（`qwen-vl-plus`、`qwen-vl-max` 等）
+- Google Vertex AI（基于 Vertex 的 Gemini）
+  - API Key 字段：填写本地服务账号 JSON 文件路径
+  - API URL 字段：填写你的 Google Cloud Project ID（如 `my-project-123456`）
+  - Model：默认 `gemini-2.0-flash-exp`（可在 UI 或代码中修改）
+  - 也可在 UI 的“Vertex AI Configuration”折叠面板中保存配置
+  - 提示：将仓库根目录的 `service_account.json.templete` 复制为 `service_account.json` 并填入真实值。真实凭据文件已被 git 忽略。`start.ps1` 会自动设置 `GOOGLE_APPLICATION_CREDENTIALS` 并尝试从该文件读取 `project_id`。
 
-### Linux / macOS
+3) 运行时选择后端
+- 使用“Choose API / 选择API”下拉框并点击“Switch / 切换”。
+- 云端服务：直接向其 HTTP API 请求（无需额外本地服务）。
+- 本地模型（Moondream / CogVLM / MiniCPM）：会启动内部 FastAPI（`openai_api.py`，`http://127.0.0.1:8000`），UI 请求会转到此服务。
 
-1. 打开终端，并导航到您想要克隆仓库的目录。
-2. 使用以下命令克隆仓库：
-    ```
-    git clone https://github.com/jiayev/GPT4V-Image-Captioner
-    ```
-3. 导航到克隆的目录：
-    ```
-    cd GPT4V-Image-Captioner
-    ```
-4. 使用以下命令使安装脚本和启动脚本变为可执行：
-    ```
-    chmod +x install_linux_mac.sh; chmod +x Start_linux_mac.sh
-    ```
-5. 执行安装脚本：
-    ```
-    ./install_linux_mac.sh
-    ```
-6. 在终端中执行启动脚本来启动GPT4V-Image-Captioner。
-    ```
-    ./start_linux_mac.sh
-    ```
-7. 复制终端中显示的URL地址，在浏览器中打开Gradio应用界面。
-8. 请在界面最上方输入OpenAI官方或者第三方的GPT-4V API Key与API Url，设置图像地址后，就可以图像打标了。
+4) 打标流程
+- 单图：上传图片，点击“Caption Single Image”。
+- 批量：填写目录路径。程序会在每张图片旁写入同名 `.txt`，并支持覆盖/前置/追加/跳过策略。
+- Prompt 可包含 `{path\\to\\captions\\}`，会自动读取与图片同名的 .txt 并注入到提示词中。
+- 质量选项会影响部分服务的图片缩放。
 
+5) 其他工具
+- Image Zip：预处理图片，加速标注。
+- 水印检测：将疑似含水印图片移动/复制到目标文件夹。
+- 图片筛选：基于规则将图片归类到不同文件夹。
+- 图片分割：将图片按网格分割保存。
+- 标签处理：统计、可视化、翻译与批量清洗（需要可选依赖）。
 
-### Windows 手动安装说明
+## 手动安装
 
-1. 按 `Win + R` 打开命令提示符。键入 `cmd` 然后按 `Enter` 。
+若不使用 `start.ps1`：
 
-2. 使用下面的命令克隆仓库至本地：
-    ```
-    git clone https://github.com/jiayev/GPT4V-Image-Captioner
-    ```
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+# 可选功能
+pip install -r requirements-optional.txt
 
-3. 克隆完成后，切换到克隆的目录中：
-    ```
-    cd GPT4V-Image-Captioner
-    ```
+# 运行
+python gpt-caption.py --port 8848
+```
 
-4. 在安装依赖库之前，在命令提示符中输入以下命令并按 `Enter` 来检查是否电脑已经安装了 Python：
-    ```
-    python --version
-    ```
-   如果未安装，会显示错误信息。请访问 [Python 官方下载页面](https://www.python.org/downloads/) 并按照指示进行安装。
+可选/本地模型说明：
+- PyTorch 请根据你的 CUDA/CPU 环境在 https://pytorch.org/get-started/locally/ 选择合适版本安装；再安装 `requirements-optional.txt` 其余依赖。
+- Hugging Face 模型体积较大（20–40GB+），请确保磁盘与显存充足（详见 UI 本地模型说明）。
 
-5. 创建一个名为 `myenv` 的虚拟环境以避免污染全局 Python 环境：
-    ```
-    python -m venv myenv
-    ```
+## 部署建议
 
-6. 激活你刚创建的虚拟环境：
-    ```
-    myenv\Scripts\activate
-    ```
+- 局域网访问：
+  - 使用 `--listen` 绑定 `0.0.0.0`，并在防火墙放行端口。
+  - 例如：`python gpt-caption.py --listen --port 8848 --no-browser`
+- 快速外网演示：
+  - 使用 `--share` 获取临时公网链接（不建议用于生产）。
+- 长期稳定访问（推荐）：
+  - 使用 Nginx/Caddy/IIS/Traefik 作为反向代理，转发到 `http://127.0.0.1:8848`；
+  - 建议在代理层开启 HTTPS 与基础认证。
 
-7. 更新 `pip`至最新版本：
-    ```
-    python -m pip install --upgrade pip
-    ```
+## 常见问题
 
-8. 在虚拟环境中安装 `requests`、`gradio` 、 `tqdm` 等库：
-    ```
-    pip install scipy networkx wordcloud matplotlib Pillow tqdm gradio requests
-    ```
+- PowerShell 无法执行脚本
+  - 执行：`Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force`
+- `google.genai` 或 `google.generativeai` 导入失败
+  - 安装可选依赖：`pip install -r requirements-optional.txt` 或 `pip install google-genai google-generativeai`
+- Qwen（DashScope）导入失败
+  - 安装：`pip install dashscope`
+- 标签可视化报错（matplotlib/networkx/wordcloud 等）
+  - 安装可选依赖：`pip install -r requirements-optional.txt`
+- Torch/CUDA 报错
+  - 按照 pytorch.org 指南安装与你环境匹配的 PyTorch，然后再安装可选依赖。
+- 大模型下载缓慢
+  - 在 UI 的下载功能中选择 `CN` 加速，或确保网络稳定。
 
-9. 完成上述步骤后，可通过双击 `Start_windows.bat` 文件来启动 GPT4V-Image-Captioner。
+## 目录与入口
+- `gpt-caption.py` – 主 Gradio 应用
+- `lib/Api_Utils.py` – 各服务路由、重试与设置持久化
+- `openai_api.py` – 本地后端的 FastAPI 包装
+- `vertex_api.py` – Vertex AI 接入
+- `lib/*` – 图像处理、提示词、标签处理与工具库
 
-
-## 更新内容
-
-### 2024年1月6日
-- **更智能的一键安装**: 增加了更智能的一键安装 (`install_windows.bat`) 功能，国内的小伙伴不用再看着pip十几kb慢慢爬了，更加国际化(×，简化了程序的安装。
-- **CogVLM支持**: 增加了CogVLM模型的一键安装以及切换页面，没有GPT4的小伙伴也可以靠本地多模态快乐玩耍了（穷哥们狂喜。
-
-### 2024年1月2日
-- **一键安装和一键启动**: 增加了一键安装 (`install_windows.bat` / `install_linux_mac.sh`) 和一键启动 (`Start_windows.bat` / `Start_linux_mac.sh`) 功能，简化了程序的安装和启动过程。
-- **环境说明补充**: 补充了在Windows和Linux环境下程序的安装和启动说明。
-
-### 2024年1月1日
-- **运行加速**: 提高了程序的打标速度。现在可以在2-3秒内完成一张图片的标注。
-- **标签处理**: 对于已有标签的图像文件，提供了以下不同处理选项："覆盖", "前置插入", "结尾追加" 和 "跳过"。
-- **子文件夹处理**: 新程序能够处理文件夹及其子文件夹中的所有图像文件，支持的图像格式包括：'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tiff', '.tif'。
-- **程序中断**: 增加了在批量打标签过程中中断打标的功能。
-- **报错筛查**: 可以根据关键词，将所有GPT标记失败的图像（例如NSFW内容）移动到新的文件夹中。
-- **本地化**: 增加了对中文的支持。
+## 许可
+本项目包含的第三方模型与库分别遵循其各自的许可证，请在商用前确认相应条款。

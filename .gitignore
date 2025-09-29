@@ -1,21 +1,72 @@
-# 忽略环境文件夹
+### Project & Python ignores
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
 myenv/
+
+# Python cache/bytecode
 __pycache__/
+*.py[cod]
+*$py.class
+.Python
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Test/coverage caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.nox/
+.tox/
+.coverage
+coverage.xml
+htmlcov/
+
+# Logs and temp files
+logs/
+*.log
+install_temp.txt
+.cache/
+
+# Jupyter/IPython
+.ipynb_checkpoints/
+
+# IDE/editor
+.vscode/
+.idea/
+.vs/
+*.sln
+*.user
+*.pyproj
+
+# OS-specific
+Thumbs.db
+.DS_Store
+
+### Data/model artifacts
 models/
 releases/
 huggingface/
+datasets/
+outputs/
 
-# 忽略特定的配置文件和图片
+### Secrets & local config
+.env
+.env.*
+*.env
+*.json
 api_settings.json
 saved_prompts.csv
-install_temp.txt
+service_account.json
+service_account*.json
 
-# 忽略系统特定的文件
-Thumbs.db
-.DS_Store
-.vs/
-*.pyproj
-*.user
-*.sln
-
+# Binary wheels occasionally dropped in repo
+*.whl
 flash_attn-2.4.2+cu118torch2.0cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
